@@ -63,36 +63,6 @@ const upload = multer({
 })
 
 
-//텍스트 감정분석 api
-app.post("/sentiment", (req, res) => {
-  let content = req.query.content;
-  axios({
-    method: "POST",
-    url: "https://naveropenapi.apigw.ntruss.com/sentiment-analysis/v1/analyze",
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": "---",
-      "X-NCP-APIGW-API-KEY": "---",
-      "Content-Type": "application/json",
-    },
-    data: {
-      content: content,
-    },
-  })
-  .then((r) => {
-    console.log("nice!!",r.data.document);
-    res.send(r.data.document);
-  })
-  .catch(function (err) {  
-    console.log("hey,,,",err);
-
-    if(res.status(400)) { // 에러코드 400이라면
-      res.status(400).json({message: err.message})
-    } else if(res.status(500)){  // 에러코드 500이라면
-      res.status(500).json({message: err.message})
-    }
-  });
-  
-});
 
 
 
@@ -256,7 +226,7 @@ app.post('/overlap', function(req, res) {
 
 
 //글 작성
-app.post('/write', function(req, res) {
+app.post('/write', async function(req, res) {
   console.log("일단 옴");
   let id = req.query.id;
   let title = req.query.title;
@@ -268,11 +238,43 @@ app.post('/write', function(req, res) {
   let voice = req.query.voice;
   let keyword = req.query.keyword;
 
-  let values = [id, title, content, year, month, day, img, voice, keyword]
+  let emotion;
+
+  //텍스트 감정분석 api
+  await axios({
+    method: "POST",
+    url: "https://naveropenapi.apigw.ntruss.com/sentiment-analysis/v1/analyze",
+    headers: {
+      "X-NCP-APIGW-API-KEY-ID": "---",
+      "X-NCP-APIGW-API-KEY": "---",
+      "Content-Type": "application/json",
+    },
+    data: {
+      content: content,
+    },
+  })
+  .then((r) => {
+    console.log("nice!!",r.data.document);
+    emotion = r.data.document.sentiment;
+    console.log("감정: ",emotion);
+    // res.send(r.data.document);
+  })
+  .catch(function (err) {  
+    console.log("hey,,,",err);
+
+    if(res.status(400)) { // 에러코드 400이라면
+      res.status(400).json({message: err.message})
+    } else if(res.status(500)){  // 에러코드 500이라면
+      res.status(500).json({message: err.message})
+    }
+  });
+
+
+  let values = [id, title, content, year, month, day, img, voice, keyword, emotion]
   console.log(values);
   // console.log(values)
   //SQL 코드
-  const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   db.query(sql, values,
     (err, result) => {
         if (err)
@@ -293,8 +295,8 @@ app.post('/write', function(req, res) {
 //     method: "POST",
 //     url: "https://naveropenapi.apigw.ntruss.com/vision/v1/face",
 //     headers: {
-//       "X-NCP-APIGW-API-KEY-ID": "dghfahlntg",
-//       "X-NCP-APIGW-API-KEY": "g7HLdLlfKf3pTWSaal8jj6oNFJsWHo7y1DsVlZva",
+//       "X-NCP-APIGW-API-KEY-ID": "---",
+//       "X-NCP-APIGW-API-KEY": "---",
 //       "Content-Type": "multipart/form-data",
 //     },
 //     data: {
