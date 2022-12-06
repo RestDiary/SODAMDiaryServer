@@ -239,6 +239,9 @@ app.post('/write', async function(req, res) {
   let keyword = req.query.keyword;
 
   let emotion;
+  let positive;
+  let negative;
+  let neutral;
 
   //텍스트 감정분석 api
   await axios({
@@ -256,7 +259,10 @@ app.post('/write', async function(req, res) {
   .then((r) => {
     console.log("nice!!",r.data.document);
     emotion = r.data.document.sentiment;
-    console.log("감정: ",emotion);
+    console.log("감정: ",r.data.document);
+    positive = (r.data.document.confidence.positive).toFixed(1);
+    negative = (r.data.document.confidence.negative).toFixed(1);
+    neutral = (r.data.document.confidence.neutral).toFixed(1);
     // res.send(r.data.document);
   })
   .catch(function (err) {  
@@ -270,11 +276,11 @@ app.post('/write', async function(req, res) {
   });
 
 
-  let values = [id, title, content, year, month, day, img, voice, keyword, emotion]
+  let values = [id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral]
   console.log(values);
   // console.log(values)
   //SQL 코드
-  const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   db.query(sql, values,
     (err, result) => {
         if (err)
