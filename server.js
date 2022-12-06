@@ -76,8 +76,8 @@ app.post("/sentiment", (req, res) => {
     method: "POST",
     url: "https://naveropenapi.apigw.ntruss.com/sentiment-analysis/v1/analyze",
     headers: {
-      "X-NCP-APIGW-API-KEY-ID": "w0fe82hq4v",
-      "X-NCP-APIGW-API-KEY": "IsaMI7s1FgwDcKloAizDXfDsNare1j0AeHvBIGbM",
+      "X-NCP-APIGW-API-KEY-ID": "---",
+      "X-NCP-APIGW-API-KEY": "---",
       "Content-Type": "application/json",
     },
     data: {
@@ -135,10 +135,10 @@ app.post('/checkNum', (req, res) => {
           "Content-Type": "application/json",
         },
         data: {
-          service_id: "service_8zokko5",
-          template_id: "template_o4gal9l",
-          user_id: "lpKbV5s1trirOPFrW",
-          accessToken: "l9ZuLyOswe7V7_eDpNPuu",
+          service_id: "---",
+          template_id: "---",
+          user_id: "---",
+          accessToken: "---",
           template_params: {
             email: email,
             checkNum: number,
