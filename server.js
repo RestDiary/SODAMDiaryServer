@@ -15,18 +15,12 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const fs = require('fs');
 app.use(cors());
 
-// aws 연동
-// aws.config.update({
-//   region: 'ap-northeast-2',
-//   accessKeyId: "AKIAQODLHYO5MQ5LJPH4",
-//   secretAccessKey: "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"
-// });
 
 // aws 연동
 const s3 = new aws.S3({
   region: 'ap-northeast-2',
-  accessKeyId: "AKIAQODLHYO5MQ5LJPH4",
-  secretAccessKey: "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"
+  accessKeyId: "---",
+  secretAccessKey: "---"
 });
 
 // sql 연동
@@ -106,7 +100,8 @@ app.post("/sentiment", (req, res) => {
 // s3에 업로드
 app.post('/upload', upload.single('image'), (req, res) => {
   console.log("일단 옴");
-  console.log(req.file)
+  res.send(req.file.location);
+  console.log(req.file.location);
 })
 
 
