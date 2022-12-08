@@ -19,7 +19,7 @@ app.use(cors());
 // aws 연동
 const s3 = new aws.S3({
   region: 'ap-northeast-2',
-  accessKeyId: "---",
+  accessKeyId: "----",
   secretAccessKey: "---"
 });
 
@@ -289,6 +289,119 @@ app.post('/write', async function(req, res) {
             res.send(result);
     });
 });
+
+//사용자 일기 내용 반환
+app.post('/myDiary',(req, res) => {
+  let id = req.query.id;
+  let values = [id];
+  console.log(values);
+  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ?"
+  
+
+  db.query(sql, values,
+    (err, result) => {
+     console.log(result)
+        if (err)
+            console.log(err);
+        else
+        // console.log(result);
+        res.send(result);
+    });
+});
+
+
+//사용자 일기 수정
+app.post('diaryModify', async function(req, res) {
+  let diarykey = req.query.diarykey;
+  let title = req.query.title;
+  let content = req.query.content;
+  let year = req.query.year;
+  let month = req.query.month;
+  let day = req.query.day;
+  let img = req.query.img;
+  let voice = req.query.voice;
+  let keyword = req.query.keyword;
+
+  let emotion;
+  let positive;
+  let negative;
+  let neutral;
+
+  //텍스트 감정분석 api
+  await axios({
+    method: "POST",
+    url: "https://naveropenapi.apigw.ntruss.com/sentiment-analysis/v1/analyze",
+    headers: {
+      "X-NCP-APIGW-API-KEY-ID": "---",
+      "X-NCP-APIGW-API-KEY": "---",
+      "Content-Type": "application/json",
+    },
+    data: {
+      content: content,
+    },
+  })
+  .then((r) => {
+    console.log("수정 nice!!",r.data.document);
+    emotion = r.data.document.sentiment;
+    console.log("감정: ",r.data.document);
+    positive = (r.data.document.confidence.positive).toFixed(1);
+    negative = (r.data.document.confidence.negative).toFixed(1);
+    neutral = (r.data.document.confidence.neutral).toFixed(1);
+  })
+  .catch(function (err) {  
+    console.log("hey,,,?",err);
+
+    if(res.status(400)) { // 에러코드 400이라면
+      res.status(400).json({message: err.message})
+    } else if(res.status(500)){  // 에러코드 500이라면
+      res.status(500).json({message: err.message})
+    }
+  });
+
+  let values = [title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral, diarykey];
+
+  const sql = "Update diary Set title = ?, content = ?, year = ?, month = ? , day = ?, img = ?, voice = ?, keyword = ?, emotion = ?, positive = ?, negative = ?, neutral = ? Where diarykey = ?"
+
+  db.query(sql, values,
+    (err, result) => {
+        if (err)
+            console.log(err);
+        else
+            res.send(result);
+    });
+})
+
+
+//사용자 일기 삭제
+app.post('diaryDelete', (req,res) => {
+  let diarykey = req.query.diarykey;
+  let imgKey = req.query.imgKey;
+
+  let values = [diarykey];
+
+  //s3에 저장된 이미지 삭제
+  s3.deleteObject({
+    Bucket: 'sodam-s3',
+    Key: imgKey,
+  }, (err, data) => {
+    if(err) {
+      console.log(err);
+    }else {
+      console.log(data);
+    }
+  }
+  );
+
+  const sql = "Delete From diary Where diarykey = ?"
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  });
+});
+
 
 //얼굴 감정분석 api
 // app.post("/face", (req, res) => {
