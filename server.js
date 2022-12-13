@@ -19,7 +19,7 @@ app.use(cors());
 // aws 연동
 const s3 = new aws.S3({
   region: 'ap-northeast-2',
-  accessKeyId: "----",
+  accessKeyId: "---",
   secretAccessKey: "---"
 });
 
@@ -290,7 +290,7 @@ app.post('/write', async function(req, res) {
     });
 });
 
-//사용자 일기 내용 반환
+//사용자 일기 내용 반환 (일반 목록 리스트)
 app.post('/myDiary',(req, res) => {
   let id = req.query.id;
   let values = [id];
@@ -309,9 +309,30 @@ app.post('/myDiary',(req, res) => {
     });
 });
 
+//사용자 일기 내용 반환 (공유 일기 리스트)
+app.post('/myShare',(req, res) => {
+  console.log("공유하러 옴");
+  let id = req.query.id;
+  let values = [id, "true"];
+  console.log(values);
+  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND shareCheck = ?"
+  
+
+  db.query(sql, values,
+    (err, result) => {
+     console.log(result)
+        if (err) {
+            console.log(err);
+        }else {
+        res.send(result);
+        }
+    });
+});
+
 
 //사용자 일기 수정
-app.post('diaryModify', async function(req, res) {
+app.post('/diaryModify', async function(req, res) {
+  console.log("수정하러 옴");
   let diarykey = req.query.diarykey;
   let title = req.query.title;
   let content = req.query.content;
@@ -326,6 +347,7 @@ app.post('diaryModify', async function(req, res) {
   let positive;
   let negative;
   let neutral;
+
 
   //텍스트 감정분석 api
   await axios({
@@ -359,7 +381,7 @@ app.post('diaryModify', async function(req, res) {
   });
 
   let values = [title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral, diarykey];
-
+  console.log(values);
   const sql = "Update diary Set title = ?, content = ?, year = ?, month = ? , day = ?, img = ?, voice = ?, keyword = ?, emotion = ?, positive = ?, negative = ?, neutral = ? Where diarykey = ?"
 
   db.query(sql, values,
@@ -373,12 +395,15 @@ app.post('diaryModify', async function(req, res) {
 
 
 //사용자 일기 삭제
-app.post('diaryDelete', (req,res) => {
+app.post('/diaryDelete', (req,res) => {
+  console.log("삭제하러옴")
   let diarykey = req.query.diarykey;
   let imgKey = req.query.imgKey;
 
-  let values = [diarykey];
+  console.log("imgKey", imgKey)
 
+  let values = [diarykey];
+  
   //s3에 저장된 이미지 삭제
   s3.deleteObject({
     Bucket: 'sodam-s3',
@@ -402,6 +427,112 @@ app.post('diaryDelete', (req,res) => {
   });
 });
 
+
+//사용자 일기내용 반환(상세페이지)
+app.post('/diaryInfo', (req, res) => {
+  let diarykey = req.query.diarykey;
+
+  let values = [diarykey];
+  let sql = "Select title, content, year, month, day, img, voice, keyword, emotion From diary Where diarykey =?"
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }
+  else {
+      res.send(result);
+    }
+})
+});
+
+
+//앨범
+app.post('/album', (req, res) => {
+  console.log("앨범");
+  let id = req.query.id;
+  let values = [id];
+
+  let sql = "select diarykey, img From diary Where id =?"
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  })
+
+});
+
+//일기 공유 버튼 선택 시
+app.post('/sharePush', (req, res) => {
+  let diarykey = req.query.diarykey;
+  
+  let value = [diarykey];
+  let values = ["false", diarykey];
+  let sql = "INSERT INTO shareCard SELECT * FROM diary WHERE diary.diarykey = ?"
+  let sql2 = "Update diary Set shareCheck = ? Where diarykey = ?"
+  console.log(diarykey);
+  //공유 일기 테이블에 일기 복사
+  db.query(sql, value, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else{
+      //일기가 복사 됐다면 기존 일기 테이블에서 shareCheck값 false로 변경
+      db.query(sql2, values, (err, result) => {
+        if(err) {
+          console.log(err);
+        }else {
+          res.send(result);
+        }
+      })
+    };
+  })
+
+});
+
+//일기 공유 시 해당 감정에 해당하는 일기만 반환 (리스트)
+app.post('/shareList', (req, res) => {
+  let diarykey = req.query.diarykey;
+  
+  let sql = "Select positive, negative, neutral From diary Where diarykey = ?";
+  let values = [diarykey];
+  console.log(values);
+  
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  });
+  
+})
+
+//일기 공유 시 감정 반환
+app.post('/shareList2', (req, res) => {
+  let id = req.query.id;
+  let emotion = req.query.emotion;
+  let emotionValue = req.query.emotionValue;
+  let sql;
+
+  if(emotion === 'neutral') {
+    sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From shareCard Where id != ? AND neutral Between ?-20 AND ?+20"
+  }else if(emotion === 'positive') {
+    sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From shareCard Where id != ? AND positive Between ?-20 AND ?+20"
+  }else if(emotion === 'negative') {
+    sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From shareCard Where id!=? AND negative Between?-20 AND ?+20"
+  }
+  
+  let values = [id, emotionValue, emotionValue];
+
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  })
+  
+})
 
 //얼굴 감정분석 api
 // app.post("/face", (req, res) => {
