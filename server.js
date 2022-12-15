@@ -65,8 +65,6 @@ const upload = multer({
 
 
 
-
-
 // s3에 업로드
 app.post('/upload', upload.single('image'), (req, res) => {
   console.log("일단 옴");
@@ -148,7 +146,55 @@ app.post('/Reset', (req, res) => {
         
     });
 
-})
+});
+
+//이메일 변경
+app.post('/changeEmail', (req, res) => {
+  let id = req.query.id;
+  let email = req.query.email;
+  let values = [email, id]
+  
+  console.log(values);
+
+  const sql = "UPDATE userInfo SET email = ? Where id = ?";
+  db.query(sql, values,
+    (err, result) => {
+     
+     console.log(result)
+        if (err)
+            console.log(err);
+        else{
+          console.log(result);
+          res.send(result);
+        }
+        
+    });
+
+});
+
+//비밀번호 맞는지 확인
+app.post('/pwCheck', (req, res) => {
+  console.log("비밀번호 확인하러 옴")
+  let id = req.query.id;
+  let pw = crypto.createHash("sha512").update(req.query.pw).digest("base64");
+  let values = [id, pw];
+  
+  const sql = "Select email From userInfo Where id = ? AND pw = ?";
+  db.query(sql, values,
+  (err, result) => {
+    if(err){
+      console.log(err);
+    }
+    if(result.length > 0){
+      console.log(result);
+      res.send("0");
+    }else {
+      res.send("1");
+    }
+    
+
+});
+});
 
 
 //회원가입
@@ -237,11 +283,13 @@ app.post('/write', async function(req, res) {
   let img = req.query.img;
   let voice = req.query.voice;
   let keyword = req.query.keyword;
+  let score = req.query.score;
 
   let emotion;
   let positive;
   let negative;
   let neutral;
+  let big;
 
   //텍스트 감정분석 api
   await axios({
@@ -263,6 +311,9 @@ app.post('/write', async function(req, res) {
     positive = (r.data.document.confidence.positive).toFixed(1);
     negative = (r.data.document.confidence.negative).toFixed(1);
     neutral = (r.data.document.confidence.neutral).toFixed(1);
+    big = Math.max(positive, negative, neutral);
+
+
     // res.send(r.data.document);
   })
   .catch(function (err) {  
@@ -275,12 +326,29 @@ app.post('/write', async function(req, res) {
     }
   });
 
+  if(emotion === "positive") {
+    score = score + big/10;
+  }else if(emotion === "negative") {
+    score = score - big/10;
+  }else if(emotion === "neutral") {
+    if(big === 100) { //neutral이 100이면 짧은 글이라서 감정 분석이 제대로 안 된 글임
+      score = score;
+    } else if(score >= 50) {
+      score = score + big/15;
+    }else if(score < 50) {
+      score = score - big/15;
+    }
+
+  }
+
 
   let values = [id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral]
+  let value = [score];
   console.log(values);
   // console.log(values)
   //SQL 코드
   const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  const sql2 = "Update userInfo Set score = ?";
   db.query(sql, values,
     (err, result) => {
         if (err)
@@ -293,10 +361,12 @@ app.post('/write', async function(req, res) {
 //사용자 일기 내용 반환 (일반 목록 리스트)
 app.post('/myDiary',(req, res) => {
   let id = req.query.id;
-  let values = [id];
+  let year = req.query.year;
+
+  let values = [id, year];
   console.log(values);
-  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ?"
   
+  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND year =?";
 
   db.query(sql, values,
     (err, result) => {
@@ -313,9 +383,11 @@ app.post('/myDiary',(req, res) => {
 app.post('/myShare',(req, res) => {
   console.log("공유하러 옴");
   let id = req.query.id;
-  let values = [id, "true"];
+  let year = req.query.year;
+
+  let values = [id, year, "true"];
   console.log(values);
-  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND shareCheck = ?"
+  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND year = ? AND shareCheck = ?"
   
 
   db.query(sql, values,
@@ -325,6 +397,7 @@ app.post('/myShare',(req, res) => {
             console.log(err);
         }else {
         res.send(result);
+        
         }
     });
 });
@@ -532,69 +605,114 @@ app.post('/shareList2', (req, res) => {
     }
   })
   
+});
+
+//일기 초기화
+app.post('/deleteAll', (req, res) => {
+  console.log("일기 초기화하러 옴");
+  let id = req.query.id;
+  let values = [id];
+
+  let sql = "delete from diary where id =?";
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  })
+});
+
+//계정 탈퇴
+app.post('/withdrawal', (req, res) => {
+  console.log("계정 탈퇴하러 옴");
+  let id = req.query.id;
+  let values = [id];
+
+  let sql = "delete From diary where id =?"; 
+  let sql2 = "delete From userInfo Where id =?";
+
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      db.query(sql2, values, (err, result) => {
+              if(err) {
+                console.log(err);
+              }else {
+                res.send(result);
+              }
+            });
+    }
+  });
+});
+
+//계정 점수 반환
+app.post('/userScore', (req, res) => {
+  console.log("계정 점수");
+  let id = req.query.id;
+  let values = [id];
+
+  let sql = "select score from userInfo where id =?";
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      res.send(result);
+    }
+  })
+
+});
+
+//감정 횟수 반환
+app.post('/count', (req, res) => {
+  let id = req.query.id;
+  let count = [];
+  
+  let values = [id];
+  
+  let sql = "select Count(emotion) as count From diary where id =? AND emotion = positive";
+  let sql2 = "select Count(emotion) as count From diary where id =? AND emotion = negative";
+  let sql3 = "select count(emotion) as count from diary where id =? AND emotion = neutral";
+  
+  db.query(sql, values, (err, result) => {
+    if(err) {
+      console.log(err);
+    }else {
+      count[0] = result;
+      console.log("0",result);
+      db.query(sql2, values, (err, result) => {
+        if(err) {
+          console.log(err);
+        }else {
+          count[1] = result;
+          console.log("1",result);
+          db.query(sql3, values, (err, result) => {
+            if(err) {
+              console.log(err);
+            }else {
+              count[2] = result;
+              console.log("2",result);
+              res.send(count);
+            }
+          });
+        }
+      });
+    }
+  });
+
+});
+
+//키워드 막대차트
+app.post('/chart/bar', (req, res) => {
+  let id = req.query.id;
+
+  const sql = "SELECT keyword, count(keyword) as cnt FROM diary WHERE id=? GROUP BY keyword ORDER BY count(keyword) DESC LIMIT 5;"
+  db.query(sql, id,
+    (err, result) => {
+        if (err)
+            console.log(err);
+        else
+            res.send(result);
+    });
 })
-
-//얼굴 감정분석 api
-// app.post("/face", (req, res) => {
-//   console.log("일단 오긴 함");
-//   let image = req.files;
-//   let path = image.image.path;
-//   let image2 = fs.createReadStream(path);
-//   console.log(image);
-//   axios({
-//     method: "POST",
-//     url: "https://naveropenapi.apigw.ntruss.com/vision/v1/face",
-//     headers: {
-//       "X-NCP-APIGW-API-KEY-ID": "---",
-//       "X-NCP-APIGW-API-KEY": "---",
-//       "Content-Type": "multipart/form-data",
-//     },
-//     data: {
-//       image: image2,
-//     },
-//   })
-//   .then((r) => {
-//     console.log("nice!!"+r.data.faces);
-//     console.log(Object.values(r.data.faces))
-//     res.send(r.data.info.emotion);
-//   })
-//   .catch(function (err) {
-//     console.log("hey,,,",err);
-
-//     if(res.status(400)) { // 에러코드 400이라면
-//       res.status(400).json({message: err.message})
-//     } else if(res.status(500)){  // 에러코드 500이라면
-//       res.status(500).json({message: err.message})
-//     }
-//   });
-     
-// });
-
-
-// // 음성 변환 api
-// async function quickstart() {
-//   // The path to the remote LINEAR16 file
-//   const gcsUri = 'gs://cloud-samples-data/speech/brooklyn_bridge.raw';
-
-//   // The audio file's encoding, sample rate in hertz, and BCP-47 language code
-//   const audio = {
-//     uri: gcsUri,
-//   };
-//   const config = {
-//     encoding: 'LINEAR16',
-//     sampleRateHertz: 16000,
-//     languageCode: 'en-US',
-//   };
-//   const request = {
-//     audio: audio,
-//     config: config,
-//   };
-
-//   // Detects speech in the audio file
-//   const [response] = await client.recognize(request);
-//   const transcription = response.results
-//     .map(result => result.alternatives[0].transcript)
-//     .join('\n');
-//   console.log(`Transcription: ${transcription}`);
-// }
-// quickstart();
