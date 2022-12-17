@@ -273,7 +273,7 @@ app.post('/overlap', function(req, res) {
 
 //글 작성
 app.post('/write', async function(req, res) {
-  console.log("일단 옴");
+  console.log("글 작성 하러 옴");
   let id = req.query.id;
   let title = req.query.title;
   let content = req.query.content;
@@ -283,13 +283,14 @@ app.post('/write', async function(req, res) {
   let img = req.query.img;
   let voice = req.query.voice;
   let keyword = req.query.keyword;
-  let score = req.query.score;
 
   let emotion;
   let positive;
   let negative;
   let neutral;
+  let score;
   let big;
+
 
   //텍스트 감정분석 api
   await axios({
@@ -304,7 +305,7 @@ app.post('/write', async function(req, res) {
       content: content,
     },
   })
-  .then((r) => {
+  .then(async(r) => {
     console.log("nice!!",r.data.document);
     emotion = r.data.document.sentiment;
     console.log("감정: ",r.data.document);
@@ -312,13 +313,10 @@ app.post('/write', async function(req, res) {
     negative = (r.data.document.confidence.negative).toFixed(1);
     neutral = (r.data.document.confidence.neutral).toFixed(1);
     big = Math.max(positive, negative, neutral);
-
-
     // res.send(r.data.document);
   })
   .catch(function (err) {  
     console.log("hey,,,",err);
-
     if(res.status(400)) { // 에러코드 400이라면
       res.status(400).json({message: err.message})
     } else if(res.status(500)){  // 에러코드 500이라면
@@ -326,51 +324,75 @@ app.post('/write', async function(req, res) {
     }
   });
 
-  if(emotion === "positive") {
-    score = score + big/10;
-  }else if(emotion === "negative") {
-    score = score - big/10;
-  }else if(emotion === "neutral") {
-    if(big === 100) { //neutral이 100이면 짧은 글이라서 감정 분석이 제대로 안 된 글임
-      score = score;
-    } else if(score >= 50) {
-      score = score + big/15;
-    }else if(score < 50) {
-      score = score - big/15;
+  let sql3 = "select score from userInfo where id =?";
+  db.query(sql3, id, (err, result) => {
+    let tempScore = result[0].score;
+
+    if (err) console.log(err);
+    else {
+      if (emotion === "positive") {
+        score = tempScore + big / 10;
+        console.log("positive", score);
+      } else if (emotion === "negative") {
+        score = tempScore - big / 10;
+        console.log("negative", score);
+      } else if (emotion === "neutral") {
+        if (big === 100) {
+          //neutral이 100이면 짧은 글이라서 감정 분석이 제대로 안 된 글임
+          score = score;
+        } else if (score >= 50) {
+          score = tempScore + big / 15;
+          console.log("neutral", score);
+        } else if (score < 50) {
+          score = tempScore - big / 15;
+          console.log("neutral", score);
+        }
+      }
     }
+  });
 
-  }
+  setTimeout(() => {
+    let values = [id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral]
+    const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    const sql2 = "Update userInfo Set score = ? Where id = ?";
+    let values2 = [score, id];
+    console.log("ㅅㅂ",values2);
 
-
-  let values = [id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral]
-  let value = [score];
-  console.log(values);
-  // console.log(values)
-  //SQL 코드
-  const sql = "INSERT INTO diary(id, title, content, year, month, day, img, voice, keyword, emotion, positive, negative, neutral) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  const sql2 = "Update userInfo Set score = ?";
-  db.query(sql, values,
-    (err, result) => {
-        if (err)
+    db.query(sql, values, (err, result) => {
+      if (err) {
+        console.log(err);
+      } else {
+        db.query(sql2, values2, (err, result) => {
+          if (err) {
             console.log(err);
-        else
+          } else {
             res.send(result);
+          }
+        });
+      }
     });
+  }, 500)
+
 });
+
+
+
+
 
 //사용자 일기 내용 반환 (일반 목록 리스트)
 app.post('/myDiary',(req, res) => {
+  console.log("일로 옴");
   let id = req.query.id;
   let year = req.query.year;
 
   let values = [id, year];
   console.log(values);
   
-  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND year =?";
+  const sql= "Select diarykey, title, content, year, month, day, img, voice, keyword, emotion From diary Where id = ? AND year =? Order By day DESC";
 
   db.query(sql, values,
     (err, result) => {
-     console.log(result)
+    //  console.log(result)
         if (err)
             console.log(err);
         else
@@ -658,10 +680,11 @@ app.post('/userScore', (req, res) => {
     if(err) {
       console.log(err);
     }else {
+      console.log(result);
+
       res.send(result);
     }
   })
-
 });
 
 //감정 횟수 반환
@@ -716,3 +739,19 @@ app.post('/chart/bar', (req, res) => {
             res.send(result);
     });
 })
+
+//일기 통계
+app.post('/chart/contribution',(req, res) => {
+  let id = req.query.id;
+  const sql= "SELECT CONCAT_WS('-', year, LPAD(month, 2, 0) , LPAD(day, 2, 0)) as date, 5 as count FROM diary WHERE id=?"
+
+  db.query(sql, id,
+    (err, result) => {
+     console.log(result)
+        if (err)
+          res.send(err);
+        else
+        // console.log(result);
+        res.send(result);
+    });
+});
